@@ -9,6 +9,7 @@ use App\Filament\Resources\Faculties\Schemas\FacultyForm;
 use App\Filament\Resources\Faculties\Tables\FacultiesTable;
 use App\Models\Faculty;
 use BackedEnum;
+use UnitEnum; // Added to handle strict Filament v4 union types
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -20,7 +21,10 @@ class FacultyResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
-    protected static ?string $recordTitleAttribute = 'School';
+    protected static ?string $recordTitleAttribute = 'name';
+
+    // ✅ FIXED: Matched the strict PHP union type required by Filament v4
+    protected static string|UnitEnum|null $navigationGroup = 'Academic Setup';
 
     public static function form(Schema $schema): Schema
     {

@@ -4,323 +4,243 @@ namespace App\Filament\Resources\Students\Forms;
 
 use Filament\Schemas\Schema;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Wizard;
+use Filament\Schemas\Components\Wizard\Step;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
+
+use App\Models\AcademicFiscalYear;
+use App\Models\BatchYear;
+use App\Models\SchoolClass;
+use App\Models\Section as SectionModel;
+use App\Models\District;
+use App\Models\Municipality;
+use App\Models\State;
 
 class StudentForm
 {
-    public static function configure(Schema $schema): Schema
+    public static function form(Schema $schema): Schema
     {
-        return $schema->components([
-            Grid::make(1)
-                ->schema([
-
-                    // ==========================================
-                    // SECTION 1: CORE STUDENT PROFILE & ACADEMICS
-                    // ==========================================
-                    Section::make('New Student Registration')
+        return $schema
+            ->components([
+                Wizard::make([
+                    
+                    Step::make('Student Info')
+                        ->description('Core identification')
+                        ->icon('heroicon-m-user')
                         ->schema([
-                            // Row 1: Administrative Identifiers (Optimized for standard display scaling)
-                            Grid::make()
-                                ->columns([
-                                    'default' => 1,
-                                    'sm' => 2,
-                                    'md' => 3,
-                                    'xl' => 5, // 5 columns on extra-wide screens, cleanly collapsing down on smaller monitors
-                                ])->schema([
-                                    TextInput::make('batch_year')->label('Batch Year *')->required(),
-                                    TextInput::make('fiscal_year')->label('Fiscal Year *')->required(),
-                                    TextInput::make('joined_batch_year')->label('Joined Batch Year *')->required(),
-                                    TextInput::make('regd_no')->label('Regd. Number'),
-                                    TextInput::make('iemis_code')->label('IEMIS Code'),
-                                ]),
+                            Grid::make(3)->schema([
+                                Select::make('academic_year_id')
+                                    ->label('Academic Year *')
+                                    ->options(fn () => AcademicFiscalYear::pluck('name', 'id'))
+                                    ->default(fn () => AcademicFiscalYear::where('is_current', true)->first()?->id)
+                                    ->required()
+                                    ->preload()
+                                    ->searchable(),
 
-                            // Sub-Grid Split: Left side for details, Right side for Image Upload
-                            Grid::make()
-                                ->columns([
-                                    'default' => 1,
-                                    'lg' => 4,
-                                ])->schema([
-                                    Grid::make(1)->columnSpan(['default' => 1, 'lg' => 3])->schema([
-                                        // Row 2: Names (English)
-                                        Grid::make()
-                                            ->columns([
-                                                'default' => 1,
-                                                'sm' => 3,
-                                            ])->schema([
-                                                TextInput::make('first_name')->label('First Name *')->required(),
-                                                TextInput::make('middle_name')->label('Middle Name'),
-                                                TextInput::make('last_name')->label('Last Name *')->required(),
-                                            ]),
-                                        // Row 3: Names (Nepali)
-                                        Grid::make()
-                                            ->columns([
-                                                'default' => 1,
-                                                'sm' => 3,
-                                            ])->schema([
-                                                TextInput::make('first_name_np')->label('First Name (Nepali) *')->required(),
-                                                TextInput::make('middle_name_np')->label('Middle Name (Nepali)'),
-                                                TextInput::make('last_name_np')->label('Last Name (Nepali) *')->required(),
-                                            ]),
-                                    ]),
+                                Select::make('batch_year_id')
+                                    ->label('Batch Year *')
+                                    ->options(fn () => BatchYear::pluck('nepali_year', 'id'))
+                                    ->default(fn () => BatchYear::where('is_current', true)->first()?->id)
+                                    ->required()
+                                    ->preload()
+                                    ->searchable(),
+
+                                TextInput::make('roll_no')
+                                    ->label('Roll No')
+                                    ->disabled() // Kept safe for automatic roll configuration triggers
+                                    ->placeholder('Auto-assigned via Roll No Setup'),
+                            ]),
+
+                            Grid::make(3)->schema([
+                                TextInput::make('first_name')
+                                    ->label('First Name *')
+                                    ->maxLength(50)
+                                    ->required(),
                                     
-                                    // Profile Photo Placement
-                                    Grid::make(1)->columnSpan(['default' => 1, 'lg' => 1])->schema([
-                                        FileUpload::make('student_image')
-                                            ->label('Student Image')
-                                            ->image()
-                                            ->avatar() // Handles circular layout and cropper automatically
-                                            ->imageEditor(),
-                                    ]),
-                                ]),
-
-                            // Row 4: Core Demographics & Identifiers
-                            Grid::make()
-                                ->columns([
-                                    'default' => 1,
-                                    'sm' => 2,
-                                    'lg' => 4,
-                                ])->schema([
-                                    TextInput::make('mobile_no')->label('Mobile No. *')->tel()->required(),
-                                    Select::make('gender')
-                                        ->label('Gender *')
-                                        ->options(['Male' => 'Male', 'Female' => 'Female', 'Other' => 'Other'])
-                                        ->required(),
-                                    TextInput::make('nationality')->label('Nationality *')->default('Nepalese')->required(),
-                                    TextInput::make('national_id_no')->label('National ID No.'),
-                                ]),
-
-                            // Row 5: Dates & Secondary Info (Automated Age Calculation)
-                            Grid::make()
-                                ->columns([
-                                    'default' => 1,
-                                    'sm' => 2,
-                                    'md' => 3,
-                                    'xl' => 5,
-                                ])->schema([
-                                    TextInput::make('email')->label('Email')->email(),
-                                    TextInput::make('campus_email')->label('Campus Email')->email(),
-                                    TextInput::make('dob_bs')->label('Date of Birth (Nepali) *')->required(),
+                                TextInput::make('middle_name')
+                                    ->label('Middle Name')
+                                    ->maxLength(50),
                                     
-                                    DatePicker::make('dob_ad')
-                                        ->label('Date of Birth (English) *')
-                                        ->required()
-                                        ->live()
-                                        ->afterStateUpdated(function (?string $state, Set $set) {
-                                            if (blank($state)) {
-                                                $set('age', null);
-                                                return;
-                                            }
+                                TextInput::make('last_name')
+                                    ->label('Last Name *')
+                                    ->maxLength(50)
+                                    ->required(),
+                            ]),
 
-                                            try {
-                                                $age = \Carbon\Carbon::parse($state)->age;
-                                                $set('age', $age);
-                                            } catch (\Exception $e) {
-                                                $set('age', null);
-                                            }
-                                        }),
+                            Grid::make(3)->schema([
+                                Select::make('gender')
+                                    ->label('Gender *')
+                                    ->options(['Male' => 'Male', 'Female' => 'Female', 'Other' => 'Other'])
+                                    ->required(),
+                                    
+                                DatePicker::make('dob_ad')
+                                    ->label('Date of Birth (AD) *')
+                                    ->maxDate(now()) // ✅ FIXED: Prevents futuristic dates entries
+                                    ->required(),
+                                    
+                                TextInput::make('mobile_no')
+                                    ->label('Mobile No. *')
+                                    ->required()
+                                    ->tel()
+                                    ->maxLength(15), // ✅ FIXED: Safe boundary constraint
+                            ]),
 
-                                    TextInput::make('age')
-                                        ->label('Age')
-                                        ->numeric()
-                                        ->readOnly()
-                                        ->extraAttributes(['class' => 'bg-gray-50 dark:bg-gray-800/50']),
-                                ]),
+                            Grid::make(3)->schema([
+                                Select::make('faculty_id')
+                                    ->label('Faculty *')
+                                    ->relationship('faculty', 'name')
+                                    ->preload() // ✅ FIXED: Optimizes database lookup load
+                                    ->live()
+                                    ->searchable()
+                                    ->required()
+                                    ->afterStateUpdated(function (Set $set) {
+                                        $set('class_id', null);
+                                        $set('section_id', null);
+                                    }),
 
-                            // Row 6: Structural Hierarchy Alignment
-                            Grid::make()
-                                ->columns([
-                                    'default' => 1,
-                                    'sm' => 2,
-                                    'lg' => 4,
-                                ])->schema([
-                                    Select::make('faculty')->relationship('faculty', 'name')->label('Select Faculty *')->required(),
-                                    Select::make('level')->relationship('level', 'name')->label('Select Level *')->required(),
-                                    Select::make('program')->relationship('program', 'name')->label('Select Program'),
-                                    Select::make('schoolClass')->relationship('schoolClass', 'name')->label('Select Class'),
-                                ]),
+                                Select::make('class_id')
+                                    ->label('Class *')
+                                    ->options(function (Get $get) {
+                                        $facultyId = $get('faculty_id');
+                                        
+                                        if (! $facultyId) {
+                                            return [];
+                                        }
 
-                            // Row 7: Sectioning & Characteristics
-                            Grid::make()
-                                ->columns([
-                                    'default' => 1,
-                                    'sm' => 2,
-                                    'md' => 3,
-                                    'xl' => 5,
-                                ])->schema([
-                                    Select::make('section')->relationship('section', 'name')->label('Select Section'),
-                                    Select::make('blood_group')
-                                        ->label('Blood Group')
-                                        ->options(['A+' => 'A+', 'A-' => 'A-', 'B+' => 'B+', 'B-' => 'B-', 'AB+' => 'AB+', 'AB-' => 'AB-', 'O+' => 'O+', 'O-' => 'O-']),
-                                    TextInput::make('medical_condition')->label('Medical Condition'),
-                                    Select::make('religion')
-                                        ->label('Religion *')
-                                        ->options(['Hinduism' => 'Hinduism', 'Buddhism' => 'Buddhism', 'Islam' => 'Islam', 'Christianity' => 'Christianity', 'Other' => 'Other'])
-                                        ->required(),
-                                    TextInput::make('ethnicity')->label('Ethnicity *')->required(),
-                                ]),
+                                        return SchoolClass::where('faculty_id', $facultyId)
+                                            ->pluck('name', 'id')
+                                            ->toArray();
+                                    })
+                                    ->live()
+                                    ->preload() // ✅ FIXED: Smoothly caches local options array
+                                    ->searchable()
+                                    ->required()
+                                    ->afterStateUpdated(fn (Set $set) => $set('section_id', null)),
 
-                            // Row 8: Societal/Background Filters & Indicators
-                            Grid::make()
-                                ->columns([
-                                    'default' => 1,
-                                    'sm' => 2,
-                                    'md' => 3,
-                                    'xl' => 5,
-                                ])->schema([
-                                    TextInput::make('student_caste')->label('Student Caste'),
-                                    TextInput::make('mother_tongue')->label('Mother Tongue')->default('Nepali'),
-                                    DatePicker::make('admission_date')->label('Select Admission Date'),
-                                    Select::make('is_mukta_kamaiya')
-                                        ->label('Is Mukta Kamaiya? *')
-                                        ->options(['No' => 'No', 'Yes' => 'Yes'])->required()->default('No'),
-                                    Select::make('is_martyr_family')
-                                        ->label('Is From Martyr Family? *')
-                                        ->options(['No' => 'No', 'Yes' => 'Yes'])->required()->default('No'),
-                                ]),
+                                Select::make('section_id')
+                                    ->label('Section')
+                                    ->options(function (Get $get) {
+                                        $classId = $get('class_id');
+                                        
+                                        if (! $classId) {
+                                            return [];
+                                        }
 
-                            // Row 9: Prior Academic Records
-                            Grid::make()
-                                ->columns([
-                                    'default' => 1,
-                                    'sm' => 2,
-                                    'md' => 3,
-                                    'xl' => 5,
-                                ])->schema([
-                                    Select::make('shift')->label('Shift')->options(['Morning' => 'Morning', 'Day' => 'Day']),
-                                    Select::make('medium')->label('Medium')->options(['English' => 'English', 'Nepali' => 'Nepali']),
-                                    TextInput::make('entrance_score')->label('Entrance Score')->numeric(),
-                                    TextInput::make('passed_level')->label('Passed Level'),
-                                    TextInput::make('passed_institution')->label('Passed Institution'),
-                                ]),
+                                        return SectionModel::where('school_class_id', $classId)
+                                            ->pluck('name', 'id')
+                                            ->toArray();
+                                    })
+                                    ->preload()
+                                    ->searchable(),
+                            ]),
+                        ]),
+
+                    Step::make('Guardian & Address')
+                        ->description('Contact and home location')
+                        ->icon('heroicon-m-home')
+                        ->schema([
+                            Grid::make(3)->schema([
+                                TextInput::make('guardian_name')
+                                    ->label('Guardian Name *')
+                                    ->maxLength(100)
+                                    ->required(),
+                                    
+                                Select::make('guardian_relation')
+                                    ->label('Relation *')
+                                    ->options(['Father' => 'Father', 'Mother' => 'Mother', 'Brother' => 'Brother', 'Sister' => 'Sister', 'Other' => 'Other'])
+                                    ->required(),
+                                    
+                                TextInput::make('guardian_phone')
+                                    ->label('Guardian Mobile *')
+                                    ->required()
+                                    ->tel()
+                                    ->maxLength(15),
+                            ]),
+
+                            Grid::make(3)->schema([
+                                Select::make('perm_state_id')
+                                    ->label('State')
+                                    ->relationship('state', 'name')
+                                    ->searchable()
+                                    ->preload()
+                                    ->live()
+                                    ->afterStateUpdated(function (Set $set) {
+                                        $set('perm_district_id', null);
+                                        $set('perm_municipality_id', null);
+                                    }),
+
+                                Select::make('perm_district_id')
+                                    ->label('District')
+                                    ->options(function (Get $get) {
+                                        $stateId = $get('perm_state_id');
+                                        
+                                        if (! $stateId) {
+                                            return [];
+                                        }
+
+                                        return District::where('state_id', $stateId)
+                                            ->pluck('name', 'id')
+                                            ->toArray();
+                                    })
+                                    ->searchable()
+                                    ->preload()
+                                    ->live()
+                                    ->afterStateUpdated(fn (Set $set) => $set('perm_municipality_id', null)),
+
+                                Select::make('perm_municipality_id')
+                                    ->label('Municipality')
+                                    ->options(function (Get $get) {
+                                        $districtId = $get('perm_district_id');
+                                        
+                                        if (! $districtId) {
+                                            return [];
+                                        }
+
+                                        return Municipality::where('district_id', $districtId)
+                                            ->pluck('name', 'id')
+                                            ->toArray();
+                                    })
+                                    ->preload()
+                                    ->searchable(),
+                            ]),
                             
-                            Grid::make()
-                                ->columns([
-                                    'default' => 1,
-                                    'sm' => 2,
-                                    'lg' => 4,
-                                ])->schema([
-                                    TextInput::make('passed_gpa')->label('Passed GPA'),
-                                    Select::make('fatherUser')->relationship('fatherUser', 'name')->label('Select Father Lookup (Optional)'),
-                                    Select::make('motherUser')->relationship('motherUser', 'name')->label('Select Mother Lookup (Optional)'),
-                                    Select::make('guardianUser')->relationship('guardianUser', 'name')->label('Select Local Guardian Lookup (Optional)'),
-                                ]),
+                            Grid::make(2)->schema([
+                                TextInput::make('perm_ward')
+                                    ->label('Ward No')
+                                    ->maxLength(5),
+                                    
+                                TextInput::make('perm_tole')
+                                    ->label('Tole / Village')
+                                    ->maxLength(100),
+                            ]),
                         ]),
 
-                    // ==========================================
-                    // SECTION 2: PARENT & GUARDIAN DETAILS TRIO
-                    // ==========================================
-                    Grid::make()
-                        ->columns([
-                            'default' => 1,
-                            'xl' => 3, // Displays Father, Mother, and Guardian as 3 side-by-side balanced cards on wide screens
-                        ])->schema([
-                        Section::make('Father Info')
-                            ->columnSpan(1)
-                            ->schema([
-                                TextInput::make('father_name')->label('Name *')->required(),
-                                TextInput::make('father_mobile')->label('Mobile No. *')->required(),
-                                TextInput::make('father_email')->label('Email')->email(),
-                                TextInput::make('father_occupation')->label('Occupation'),
-                                TextInput::make('father_office_name')->label('Office Name'),
-                                TextInput::make('father_designation')->label('Designation'),
-                                TextInput::make('father_office_contact')->label('Office Contact'),
-                                TextInput::make('father_address')->label('Address'),
-                            ]),
-
-                        Section::make('Mother Info')
-                            ->columnSpan(1)
-                            ->schema([
-                                TextInput::make('mother_name')->label('Name *')->required(),
-                                TextInput::make('mother_mobile')->label('Mobile No.')->required(),
-                                TextInput::make('mother_email')->label('Email')->email(),
-                                TextInput::make('mother_occupation')->label('Occupation'),
-                                TextInput::make('mother_office_name')->label('Office Name'),
-                                TextInput::make('mother_designation')->label('Designation'),
-                                TextInput::make('mother_office_contact')->label('Office Contact'),
-                                TextInput::make('mother_address')->label('Address'),
-                            ]),
-
-                        Section::make('Local Guardian Info')
-                            ->columnSpan(1)
-                            ->schema([
-                                TextInput::make('guardian_name')->label('Name *')->required(),
-                                Select::make('guardian_gender')->label('Gender')->options(['Male'=>'Male', 'Female'=>'Female', 'Other'=>'Other']),
-                                TextInput::make('guardian_mobile')->label('Mobile No. *')->required(),
-                                TextInput::make('guardian_email')->label('Email')->email(),
-                                TextInput::make('guardian_occupation')->label('Occupation'),
-                                TextInput::make('guardian_relation')->label('Relation'),
-                                TextInput::make('guardian_office_name')->label('Office Name'),
-                                TextInput::make('guardian_address')->label('Address'),
-                            ]),
-                    ]),
-
-                    // ==========================================
-                    // SECTION 3: LOCATION ADDRESS GEOMETRY
-                    // ==========================================
-                    Grid::make()
-                        ->columns([
-                            'default' => 1,
-                            'lg' => 2, // split Permanent and Temporary addresses into 2 clean columns
-                        ])->schema([
-                        Section::make('Permanent Address')
-                            ->columnSpan(1)
-                            ->schema([
-                                Grid::make(2)->schema([
-                                    TextInput::make('perm_country')->label('Country')->default('Nepal'),
-                                    TextInput::make('perm_state')->label('Select State'),
-                                    TextInput::make('perm_district')->label('Select District'),
-                                    TextInput::make('perm_municipality')->label('Select Municipality'),
-                                    TextInput::make('perm_ward')->label('Ward Number')->numeric(),
-                                    TextInput::make('perm_google_code')->label('Google Plus Code'),
-                                    TextInput::make('perm_zip')->label('Postcode / Zip / PIN'),
-                                    TextInput::make('perm_tole')->label('Tole / Street Address'),
-                                ]),
-                                TextInput::make('perm_house_no')->label('House Number'),
-                            ]),
-
-                        Section::make('Temporary Address')
-                            ->columnSpan(1)
-                            ->schema([
-                                Grid::make(2)->schema([
-                                    TextInput::make('temp_country')->label('Country')->default('Nepal'),
-                                    TextInput::make('temp_state')->label('Select State'),
-                                    TextInput::make('temp_district')->label('Select District'),
-                                    TextInput::make('temp_municipality')->label('Select Municipality'),
-                                    TextInput::make('temp_ward')->label('Ward Number')->numeric(),
-                                    TextInput::make('temp_google_code')->label('Google Plus Code'),
-                                    TextInput::make('temp_zip')->label('Postcode / Zip / PIN'),
-                                    TextInput::make('temp_tole')->label('Tole / Street Address'),
-                                ]),
-                                TextInput::make('temp_house_no')->label('House Number'),
-                            ]),
-                    ]),
-
-                    // ==========================================
-                    // SECTION 4: SYSTEM DOCUMENTATION & ARCHIVE
-                    // ==========================================
-                    Section::make('Document & Save')
+                    Step::make('Attachments')
+                        ->description('Photos and paperwork')
+                        ->icon('heroicon-m-document-text')
                         ->schema([
-                            Grid::make()
-                                ->columns([
-                                    'default' => 1,
-                                    'sm' => 2,
-                                ])->schema([
-                                    Select::make('document_type')
-                                        ->label('Select Document Type')
-                                        ->options(['Mark Sheet' => 'Mark Sheet', 'Transfer Certificate' => 'Transfer Certificate', 'Citizenship' => 'Citizenship Copy']),
-                                    FileUpload::make('attached_document')
-                                        ->label('Upload File')
-                                        ->disk('public')
-                                        ->directory('student-documents'),
-                                ]),
+                            Grid::make(2)->schema([
+                                FileUpload::make('student_image')
+                                    ->label('Student Profile Image')
+                                    ->image()
+                                    ->maxFiles(1)
+                                    ->avatar()
+                                    ->columnSpan(1),
+                                    
+                                FileUpload::make('document_path')
+                                    ->label('Other Certificates / Documents')
+                                    ->multiple()
+                                    ->maxFiles(3)
+                                    ->columnSpan(1),
+                            ]),
                         ]),
-
-                ]),
-        ]);
+                        
+                ])->columnSpanFull()
+            ]);
     }
 }

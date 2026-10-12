@@ -22,3 +22,6 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+debug_*.php
+populate_*.php
+/public/test_*

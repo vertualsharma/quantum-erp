@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Filament\Resources\Students\Schemas;
+namespace App\Filament\Resources\ClassSubjects\Schemas;
 
 use Filament\Schemas\Schema;
 
-class StudentForm
+class ClassSubjectForm
 {
     public static function configure(Schema $schema): Schema
     {

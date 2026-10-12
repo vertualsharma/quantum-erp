@@ -14,7 +14,10 @@ class LevelForm
             ->components([
                 TextInput::make('name')
                     ->required(),
+                    
+                // ✅ FIXED: Added default(true) so new levels are active automatically
                 Toggle::make('is_active')
+                    ->default(true)
                     ->required(),
             ]);
     }

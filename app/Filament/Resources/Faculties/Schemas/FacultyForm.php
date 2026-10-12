@@ -18,7 +18,10 @@ class FacultyForm
                 Textarea::make('description')
                     ->default(null)
                     ->columnSpanFull(),
+                    
+                // ✅ FIXED: Added default(true) so new faculties are active automatically
                 Toggle::make('is_active')
+                    ->default(true)
                     ->required(),
             ]);
     }

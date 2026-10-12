@@ -1,0 +1,21 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class ExamSubjectMarkSetup extends Model
+{
+    protected $guarded = [];
+
+    public function examClassSetup(): BelongsTo
+    {
+        return $this->belongsTo(ExamClassSetup::class);
+    }
+
+    public function subject(): BelongsTo
+    {
+        return $this->belongsTo(Subject::class);
+    }
+}
